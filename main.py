@@ -472,6 +472,11 @@ class ChessBoard: #A chess board to interact with
         for a in rem:
             moves.remove(a)
         return moves
+    def inCheck(self,side): #Returns true if a side is in check
+        for x,a in enumerate(self.__board):
+            for y,b in enumerate(a):
+                if b.getType()==6 and b.getSide()==side:
+                    return self.isAttack(x,y)
     def undoMove(self,*res): #Undus a move
         if len(self.undoList)==0:
             return 0
@@ -502,9 +507,31 @@ class ChessBoard: #A chess board to interact with
                 self.undoMove(1)
                 self.undoMove(1)
         deSelectAll()
-
-
-
+    def totalMove(self,side): #Returns ALL the possible moves for the player
+        res = []
+        for x,a in enumerate(self.__board):
+            for y,b in enumerate(a):
+                if b.getSide()==side:
+                    res.append([x+0,y+0,self.getAllMoves(x,y)])
+        return res
+def undoMove(): #Undus a move
+    board.undoMove()
+    pMove = [board.totalMove(-1),board.totalMove(1)]
+    ln1 = 0
+    ln2 = 0
+    for a in pMove[0]:
+        ln1+=len(a[2])
+    for a in pMove[1]:
+        ln2+=len(a[2])
+    gStatus.config(text="Nothings happening")
+    if board.inCheck(1):
+        gStatus.config(text="White is in check")
+    elif board.inCheck(-1):
+        gStatus.config(text="Black is in check")
+    if ln1==0:
+        gStatus.config(text="White wins!")
+    elif ln2==0:
+        gStatus.config(text="Black wins!")
 def drawAll(): #Draws everything to the canvas
     draw.delete(ALL)
     for xy in range(1,8):
@@ -512,49 +539,69 @@ def drawAll(): #Draws everything to the canvas
         draw.create_line(0,xy*45,360,xy*45)
     board.callAll("draw",draw)
 def deSelectAll(): #De-selects all pieces
-    if select[0]:
-        select[0] = False
-        for a in select[2]:
+    if sele[0]:
+        sele[0] = False
+        for a in sele[2]:
             draw.delete(a)
-        select[2] = []
+        sele[2] = []
 def click(ev): #The mouse was clicked
+    global pMove
     if board.inAnimation:
         return 0
     clos = draw.find_closest(ev.x,ev.y)
     tag = draw.gettags(clos)
     if len(tag)!=0:
+        did = True
         if "," in tag[0]:
             deSelectAll()
             spl = tag[0].split(",")
             if len(spl)>=2:
                 if spl[0].isnumeric() and spl[1].isnumeric():
-                    select[0] = True
-                    select[1] = [int(spl[0])+0,int(spl[1])+0]
+                    sele[0] = True
+                    sele[1] = [int(spl[0])+0,int(spl[1])+0]
                     mvs = board.getAllMoves(int(spl[0]),int(spl[1]))
                     for a in mvs:
                         if len(a)==3:
-                            select[2].append(draw.create_oval((a[0]*45)+10,(a[1]*45)+10,(a[0]*45)+35,(a[1]*45)+35,outline="",fill="green",
+                            sele[2].append(draw.create_oval((a[0]*45)+10,(a[1]*45)+10,(a[0]*45)+35,(a[1]*45)+35,outline="",fill="green",
                                                                 tags=str(a[0])+"x"+str(a[1])+"x"+a[2]))
                         else:
-                            select[2].append(draw.create_oval((a[0]*45)+10,(a[1]*45)+10,(a[0]*45)+35,(a[1]*45)+35,outline="",fill="green",
+                            sele[2].append(draw.create_oval((a[0]*45)+10,(a[1]*45)+10,(a[0]*45)+35,(a[1]*45)+35,outline="",fill="green",
                                                                 tags=str(a[0])+"x"+str(a[1])))
-        elif "x" in tag[0] and select[0]:
+        elif "x" in tag[0] and sele[0]:
             spl = tag[0].split("x")
             if len(spl)>=2:
                 if spl[0].isnumeric() and spl[1].isnumeric():
                     if len(spl)==3:
                         if spl[2]=="c": #Castle
                             if int(spl[0])==0:
-                                board.movePiece(select[1][0],select[1][1],2,select[1][1],False)
+                                board.movePiece(sele[1][0],sele[1][1],2,sele[1][1],False)
                                 board.movePiece(int(spl[0]),int(spl[1]),3,int(spl[1]),True)
                             else:
-                                board.movePiece(select[1][0],select[1][1],6,select[1][1],False)
+                                board.movePiece(sele[1][0],sele[1][1],6,sele[1][1],False)
                                 board.movePiece(int(spl[0]),int(spl[1]),5,int(spl[1]),True)
                     else:
-                        board.movePiece(select[1][0],select[1][1],int(spl[0]),int(spl[1]),False)
+                        board.movePiece(sele[1][0],sele[1][1],int(spl[0]),int(spl[1]),False)
             deSelectAll()
         else:
+            did = False
             deSelectAll()
+        if did:
+            pMove = [board.totalMove(-1),board.totalMove(1)]
+            ln1 = 0
+            ln2 = 0
+            for a in pMove[0]:
+                ln1+=len(a[2])
+            for a in pMove[1]:
+                ln2+=len(a[2])
+            gStatus.config(text="Nothings happening")
+            if board.inCheck(1):
+                gStatus.config(text="White is in check")
+            elif board.inCheck(-1):
+                gStatus.config(text="Black is in check")
+            if ln1==0:
+                gStatus.config(text="White wins!")
+            elif ln2==0:
+                gStatus.config(text="Black wins!")
     else:
         deSelectAll()
 def resetBoard():
@@ -563,17 +610,36 @@ def resetBoard():
         deSelectAll()
         drawAll()
 
+def serverLoop():
+    read,write,err = select.select(sockList,[],[],0)
+    for soc in read:
+        if soc==sock: #New connection
+            con,addr = self.sock.accept()
+        else:
+            try:
+                data= sock.recv(4046)
+                if data:
+                    pass
+                else:
+                    print("Error reading infomation")
+            except:
+                raise
+    main.after(1,serverLoop)
+
+
 
 
 #Variables
 botList = [] #A list that contains all the bots online
 phot = {}
 board = ChessBoard()
-select = [False,[-1,-1],[]]
+sele = [False,[-1,-1],[]]
+pMove = [[],[]] #A list for all the possible moves for both players
 
 #Tkinter stuff
 main = Tk()
 main.title("Distributed chess AI")
+main.resizable(width=FALSE, height=FALSE)
 
 phot[1]=PhotoImage(file="Pieces/1.png")
 phot[2]=PhotoImage(file="Pieces/2.png")
@@ -601,10 +667,22 @@ gBotScroll.pack(side=RIGHT,fill=Y)
 gside.pack(side=RIGHT,fill=Y)
 
 gBotm = Frame(main)
-gUndo = ttk.Button(gBotm,text="Undo move",command=board.undoMove)
+gUndo = ttk.Button(gBotm,text="Undo move",command=undoMove)
 gUndo.pack(side=LEFT)
 gReset = ttk.Button(gBotm,text="Reset",command=resetBoard)
 gReset.pack(side=LEFT)
+gProg = ttk.Progressbar(gBotm,mode='determinate',orient=HORIZONTAL)
+gProg.pack(side=RIGHT,fill=X,expand=True)
+
+gBotM = Frame(main)
+gSimB = ttk.Button(gBotM,text="Simulate black's turn")
+gSimB.pack(side=LEFT)
+gSimW = ttk.Button(gBotM,text="Simulate white's turn")
+gSimW.pack(side=LEFT)
+gStatus = ttk.Label(gBotM,text="Nothings happening")
+gStatus.pack(side=LEFT)
+gBotM.pack(side=BOTTOM,fill=X)
+
 gBotm.pack(side=BOTTOM,fill=X)
 
 draw = Canvas(main,width=360,height=360,bg="white")
@@ -613,4 +691,15 @@ draw.pack(side=LEFT)
 draw.phot = phot
 drawAll()
 
+ip = socket.gethostbyname(socket.gethostname())
+port = 3764
+
+sock = socket.socket(socket.AF_INET,socket.SOCK_STREAM)
+sock.setsockopt(socket.SOL_SOCKET,socket.SO_REUSEADDR, 1)
+sock.bind((ip,port))
+sock.listen(60)
+sockList = [sock]
+print("Binded to ip "+ip+" on port "+str(port))
+
+main.after(10,serverLoop)
 main.mainloop()
