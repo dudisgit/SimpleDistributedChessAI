@@ -1,5 +1,6 @@
 from tkinter import *
 from tkinter import ttk
+import tkinter.messagebox as box
 import socket,select,math
 
 #ID's
@@ -106,11 +107,13 @@ class ChessBoard: #A chess board to interact with
             for y in range(8):
                 self.__board[x].append(ChessPiece(0))
         self.inAnimation = False #Is true when the board is currently animating a movement (to stop moving pieces while it is animating)
+        self.undoList = []
         self.resetBoard()
     def resetBoard(self): #Resets the board back to starting positions
         for i in range(8):
             self.__board[i][1].setType(1)
             self.__board[i][6].setType(1)
+        self.undoList = []
         self.__board[0][0].setType(2)
         self.__board[7][0].setType(2)
         self.__board[0][7].setType(2)
@@ -142,16 +145,22 @@ class ChessBoard: #A chess board to interact with
             for y in x:
                 callObj = getattr(y,func)
                 callObj(*params)
-    def movePiece(self,x,y,tx,ty): #Move a piece from (x,y) to (tx,ty)
+    def movePiece(self,x,y,tx,ty,dob): #Move a piece from (x,y) to (tx,ty)
         if x in range(8) and y in range(8) and tx in range(8) and ty in range(8):
             itm = self.__board[x].pop(y)
             self.__board[x].insert(y,ChessPiece(0))
             self.__board[tx][ty].delete()
+            beft = self.__board[tx][ty].getType()
             self.__board[tx][ty] = itm
-            if itm.getType()==1 and ty==0 or ty==7:
+            if itm.getType()==1 and (ty==0 or ty==7):
                 swi = PieceSelect()
                 self.__board[tx][ty].setType(swi.sel)
                 self.__board[tx][ty].reDraw()
+                self.undoList.append([x,y,tx,ty,beft,"p"])
+            elif dob:
+                self.undoList.append([x,y,tx,ty,beft,"c"])
+            else:
+                self.undoList.append([x,y,tx,ty,beft])
             itm.moveTo([tx,ty])
     def isAttack(self,px,py): #Returns true if the piece is being attacked!
         #Rook or queen
@@ -463,6 +472,38 @@ class ChessBoard: #A chess board to interact with
         for a in rem:
             moves.remove(a)
         return moves
+    def undoMove(self,*res): #Undus a move
+        if len(self.undoList)==0:
+            return 0
+        l = self.undoList.pop()
+        if len(l)==5:
+            hold = self.__board[l[2]].pop(l[3])
+            self.__board[l[2]].insert(l[3],ChessPiece(l[4]))
+            if l[4]!=0:
+                self.__board[l[2]][l[3]].setSide(hold.getSide()*-1)
+                self.__board[l[2]][l[3]].pos = [l[2],l[3]]
+                self.__board[l[2]][l[3]].draw(draw)
+            self.__board[l[0]][l[1]] = hold
+            hold.moveTo([l[0],l[1]])
+            if len(res)!=0:
+                hold.hasMoved = False
+        else:
+            if l[5]=="p": #Was ones a pawn
+                hold = self.__board[l[2]].pop(l[3])
+                hold.delete()
+                self.__board[l[2]].insert(l[3],ChessPiece(0))
+                self.__board[l[0]][l[1]] = ChessPiece(1)
+                self.__board[l[0]][l[1]].pos = [l[2],l[3]]
+                self.__board[l[0]][l[1]].setSide(hold.getSide())
+                self.__board[l[0]][l[1]].draw(draw)
+                self.__board[l[0]][l[1]].moveTo([l[0],l[1]])
+            elif l[5]=="c": #A castle was taken place
+                self.undoList.append(l[:5])
+                self.undoMove(1)
+                self.undoMove(1)
+        deSelectAll()
+
+
 
 def drawAll(): #Draws everything to the canvas
     draw.delete(ALL)
@@ -504,16 +545,23 @@ def click(ev): #The mouse was clicked
                     if len(spl)==3:
                         if spl[2]=="c": #Castle
                             if int(spl[0])==0:
-                                board.movePiece(select[1][0],select[1][1],2,select[1][1])
-                                board.movePiece(int(spl[0]),int(spl[1]),3,int(spl[1]))
+                                board.movePiece(select[1][0],select[1][1],2,select[1][1],False)
+                                board.movePiece(int(spl[0]),int(spl[1]),3,int(spl[1]),True)
                             else:
-                                board.movePiece(select[1][0],select[1][1],6,select[1][1])
-                                board.movePiece(int(spl[0]),int(spl[1]),5,int(spl[1]))
+                                board.movePiece(select[1][0],select[1][1],6,select[1][1],False)
+                                board.movePiece(int(spl[0]),int(spl[1]),5,int(spl[1]),True)
                     else:
-                        board.movePiece(select[1][0],select[1][1],int(spl[0]),int(spl[1]))
+                        board.movePiece(select[1][0],select[1][1],int(spl[0]),int(spl[1]),False)
             deSelectAll()
         else:
             deSelectAll()
+    else:
+        deSelectAll()
+def resetBoard():
+    if box.askyesno(title="Reset board",message="Are you sure you want to reset the board?"):
+        board.resetBoard()
+        deSelectAll()
+        drawAll()
 
 
 
@@ -551,6 +599,13 @@ gBotList.pack(side=LEFT,fill=Y,expand=True)
 gBotScroll.config(command=gBotList.yview)
 gBotScroll.pack(side=RIGHT,fill=Y)
 gside.pack(side=RIGHT,fill=Y)
+
+gBotm = Frame(main)
+gUndo = ttk.Button(gBotm,text="Undo move",command=board.undoMove)
+gUndo.pack(side=LEFT)
+gReset = ttk.Button(gBotm,text="Reset",command=resetBoard)
+gReset.pack(side=LEFT)
+gBotm.pack(side=BOTTOM,fill=X)
 
 draw = Canvas(main,width=360,height=360,bg="white")
 draw.bind("<Button-1>",click)
