@@ -1,7 +1,8 @@
 from tkinter import *
 from tkinter import ttk
 import tkinter.messagebox as box
-import socket,select,math
+import socket,select,math,pickle,time
+from random import randint
 
 #ID's
 #0: Empty
@@ -16,10 +17,32 @@ import socket,select,math
 #+: White
 #-: Black
 
+def listHash(lis): #Returns the sum of the hash for a list
+    res = 0
+    for a in lis:
+        if type(a)==list:
+            res+=listHash(a)
+        elif type(a)==int:
+            res+=abs(a)
+    return res
+
 #Classes
 class Bot:
-    def __init__(self):
-        pass
+    def __init__(self,socc):
+        self.sock = socc
+        self.name = "No-name"
+    def send(self,lis): #Sends a message to the client, keeps sending until the client sends its hash back
+        has = listHash(lis)
+        pic = pickle.dumps(lis)
+        while True:
+            self.sock.send(pic)
+            tWait = time.time()+0.04
+            while time.time()<tWait:
+                serverLoop(1)
+            if lastMessage[0]=="r":
+                if lastMessage[1]==has:
+                    break
+
 class ChessIcon: #Used for the visual element for the chess pieces
     def __init__(self):
         self.drawObj = -1
@@ -514,6 +537,51 @@ class ChessBoard: #A chess board to interact with
                 if b.getSide()==side:
                     res.append([x+0,y+0,self.getAllMoves(x,y)])
         return res
+    def givePickle(self): #Returns the whole board ready to be converted to pickle
+        lis = []
+        for x,a in enumerate(self.__board):
+            lis.append([])
+            for y,b in enumerate(a):
+                lis[x].append(b.getType()*b.getSide())
+        return ["b",lis]
+
+def simulateTurn(side):
+    if len(botList)==0:
+        return 0
+    gStatus.config(text="Getting moves...")
+    main.update()
+    goes = board.totalMove(side)
+    gStatus.config(text="Splitting...")
+    main.update()
+    split = [[]]*len(botList)
+    end = 0
+    cur = 0
+    for a in goes:
+        split[cur].append(a)
+        end+=1
+        if end>len(goes)/len(botList):
+            end=0
+            cur+=1
+    gStatus.config(text="Sending...")
+    main.update()
+    brd = board.givePickle()
+    for i,a in enumerate(split):
+        botList[i].send(brd) #Send the board
+        time.sleep(0.1) #Wait an amount of time for the message to send fully
+        for i2,b in enumerate(a):
+            botList[i].send(["t",b])
+            gProg["value"] = ((i+(i2/len(a)))/len(split))*100
+            main.update()
+            time.sleep(0.03)
+        botList[i].send(["s",3]) #3 is the search depth
+        gProg["value"] = (i/len(split))*100
+        gStatus.config(text="Sending... ("+str(i)+"/"+str(len(split))+")")
+        main.update()
+    gProg["value"] = 0
+    gStatus.config(text="Nothings happening")
+
+
+
 def undoMove(): #Undus a move
     board.undoMove()
     pMove = [board.totalMove(-1),board.totalMove(1)]
@@ -610,21 +678,31 @@ def resetBoard():
         deSelectAll()
         drawAll()
 
-def serverLoop():
+def serverLoop(*can):
+    global lastMessage
     read,write,err = select.select(sockList,[],[],0)
     for soc in read:
         if soc==sock: #New connection
-            con,addr = self.sock.accept()
+            con,addr = sock.accept()
+            sockList.append(con)
+            botList.append(Bot(con))
+            try:
+                botList[-1].name = socket.gethostbyaddr(addr[0])
+            except:
+                botList[-1].name = addr[0]
+            gBotList.insert(END,botList[-1].name)
         else:
             try:
-                data= sock.recv(4046)
+                data = soc.recv(4096)
                 if data:
-                    pass
+                    d = pickle.loads(data)
+                    lastMessage = d
                 else:
                     print("Error reading infomation")
             except:
                 raise
-    main.after(1,serverLoop)
+    if len(can)==0:
+        main.after(1,serverLoop)
 
 
 
@@ -635,6 +713,7 @@ phot = {}
 board = ChessBoard()
 sele = [False,[-1,-1],[]]
 pMove = [[],[]] #A list for all the possible moves for both players
+lastMessage = [] #The last message that was received
 
 #Tkinter stuff
 main = Tk()
@@ -675,9 +754,9 @@ gProg = ttk.Progressbar(gBotm,mode='determinate',orient=HORIZONTAL)
 gProg.pack(side=RIGHT,fill=X,expand=True)
 
 gBotM = Frame(main)
-gSimB = ttk.Button(gBotM,text="Simulate black's turn")
+gSimB = ttk.Button(gBotM,text="Simulate black's turn",command=lambda: simulateTurn(-1))
 gSimB.pack(side=LEFT)
-gSimW = ttk.Button(gBotM,text="Simulate white's turn")
+gSimW = ttk.Button(gBotM,text="Simulate white's turn",command=lambda: simulateTurn(1))
 gSimW.pack(side=LEFT)
 gStatus = ttk.Label(gBotM,text="Nothings happening")
 gStatus.pack(side=LEFT)
