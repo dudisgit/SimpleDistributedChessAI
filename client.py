@@ -13,10 +13,11 @@ def listHash(lis): #Returns the sum of the hash for a list
 
 sock = socket.socket(socket.AF_INET,socket.SOCK_STREAM)
 sock.settimeout(30)
-sock.connect(("10.20.0.2",3764))
+sock.connect(("10.20.0.8",3764))
 print("Connected")
 board = []
 turns = []
+moves = []
 
 def zAdd(n):
     if len(str(n))==1:
@@ -34,6 +35,7 @@ while True:
             sock.sendall(pickle.dumps(["r",listHash(mes)]))
             if mes[0]=="b":
                 board = mes[1]
+                moves = mes[2]
                 turns = []
             elif mes[0]=="t" and not mes[1] in turns:
                 turns.append(mes[1])
@@ -45,12 +47,17 @@ while True:
                         file.write(zAdd(b))
                     file.write("\n")
                 file.write(str(mes[1])+"\n")
+                file.write(str(mes[2])+"\n")
+                for a in moves:
+                    file.write(str(a[0])+str(a[1])+str(int(a[2])))
+                file.write("\n")
                 for a in turns:
-                    file.write(zAdd(a[0])+zAdd(a[1]))
-                    for b in a[2]:
-                        if len(b)==3:
-                            file.write(zAdd(b[0])+zAdd(b[1])+b[2])
-                        else:
-                            file.write(zAdd(b[0])+zAdd(b[1])+"0")
-                    file.write("\n")
+                    if len(a[2])!=0:
+                        file.write(str(a[0])+str(a[1]))
+                        for b in a[2]:
+                            if len(b)==3:
+                                file.write(str(b[0])+str(b[1])+b[2])
+                            else:
+                                file.write(str(b[0])+str(b[1])+"0")
+                        file.write("\n")
                 file.close()

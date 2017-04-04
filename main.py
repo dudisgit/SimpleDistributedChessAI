@@ -539,11 +539,14 @@ class ChessBoard: #A chess board to interact with
         return res
     def givePickle(self): #Returns the whole board ready to be converted to pickle
         lis = []
+        mvs = []
         for x,a in enumerate(self.__board):
             lis.append([])
             for y,b in enumerate(a):
                 lis[x].append(b.getType()*b.getSide())
-        return ["b",lis]
+                if b.getType()==2 or b.getType()==6:
+                    mvs.append([x+0,y+0,b.hasMoved])
+        return ["b",lis,mvs]
 
 def simulateTurn(side):
     if len(botList)==0:
@@ -573,7 +576,7 @@ def simulateTurn(side):
             gProg["value"] = ((i+(i2/len(a)))/len(split))*100
             main.update()
             time.sleep(0.03)
-        botList[i].send(["s",3]) #3 is the search depth
+        botList[i].send(["s",3,side]) #3 is the search depth
         gProg["value"] = (i/len(split))*100
         gStatus.config(text="Sending... ("+str(i)+"/"+str(len(split))+")")
         main.update()
